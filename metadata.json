@@ -1,0 +1,5 @@
+{
+  "name": "NetGuardian AI - Network Operations Center",
+  "description": "A professional AI-powered network monitoring platform supporting ESXi, PVE, Docker, and network topology visualization. Features a bilingual (EN/CN) interface and an integrated AI Copilot for automated diagnostics and configuration.",
+  "requestFramePermissions": []
+}
