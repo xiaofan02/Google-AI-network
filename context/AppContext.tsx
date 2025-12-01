@@ -1,7 +1,8 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { Device, TopologyData, LogEntry, Language, DeviceType, DeviceStatus, Vulnerability, Report, TrafficPoint, Subnet, BugReport, AISettings, Vendor, CloudResource, AutomationTask, InspectionReport, InspectionItem, InspectionSettings } from '../types';
-import { generateMockTopology, generateMockReport, generateBugDatabase, generateSyslogs, generateCloudResources, generateAutomationTasks } from '../services/mockDataService';
+import { Device, TopologyData, LogEntry, Language, DeviceType, DeviceStatus, Vulnerability, Report, TrafficPoint, Subnet, BugReport, AISettings, Vendor, CloudResource, AutomationTask, InspectionReport, InspectionItem, InspectionSettings, ComplianceRule, ConfigBackup, FlowRecord } from '../types';
+import { generateMockTopology, generateMockReport, generateBugDatabase, generateSyslogs, generateCloudResources, generateAutomationTasks, generateConfigBackups, generateNetflowData } from '../services/mockDataService';
+import { geminiService } from '../services/geminiService';
 
 interface AppContextType {
   devices: Device[];
@@ -16,6 +17,10 @@ interface AppContextType {
   cloudResources: CloudResource[];
   automationTasks: AutomationTask[];
   
+  // New Modules
+  configBackups: ConfigBackup[];
+  netflowData: FlowRecord[];
+
   // Inspection State
   inspectionReport: InspectionReport | null;
   inspectionHistory: InspectionReport[];
@@ -23,6 +28,8 @@ interface AppContextType {
   inspectionProgress: number;
   inspectionSettings: InspectionSettings;
   updateInspectionSettings: (settings: Partial<InspectionSettings>) => void;
+  complianceRules: ComplianceRule[];
+  addComplianceRule: (rule: Partial<ComplianceRule>) => void;
 
   isScanning: boolean;
   scanProgress: number;
@@ -53,6 +60,14 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
+export const useApp = () => {
+  const context = useContext(AppContext);
+  if (context === undefined) {
+    throw new Error('useApp must be used within an AppProvider');
+  }
+  return context;
+};
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [data, setData] = useState<{ devices: Device[], topology: TopologyData, vulnerabilities: Vulnerability[] } | null>(null);
   const [logs, setLogs] = useState<LogEntry[]>([]);
@@ -60,6 +75,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [bugDatabase, setBugDatabase] = useState<BugReport[]>([]);
   const [cloudResources, setCloudResources] = useState<CloudResource[]>([]);
   const [automationTasks, setAutomationTasks] = useState<AutomationTask[]>([]);
+  const [configBackups, setConfigBackups] = useState<ConfigBackup[]>([]);
+  const [netflowData, setNetflowData] = useState<FlowRecord[]>([]);
   
   const [reports, setReports] = useState<Report[]>([
       { id: 'r1', name: 'Asset_Inventory_Q3.pdf', type: 'Asset', date: new Date('2023-10-24'), size: '2.4 MB', status: 'READY' },
@@ -69,7 +86,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [trafficHistory, setTrafficHistory] = useState<TrafficPoint[]>([]);
   const [language, setLanguage] = useState<Language>('cn');
   
-  // AI Settings
   const [aiSettings, setAiSettings] = useState<AISettings>({
       useCustom: false,
       apiKey: '',
@@ -77,10 +93,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       model: 'gemini-2.5-flash'
   });
 
-  // Copilot Trigger
   const [copilotTrigger, setCopilotTrigger] = useState<string | null>(null);
-
-  // Security Scan State
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
 
@@ -91,12 +104,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [inspectionHistory, setInspectionHistory] = useState<InspectionReport[]>([]);
   const [inspectionSettings, setInspectionSettings] = useState<InspectionSettings>({
       enabled: false,
-      interval: 60, // minutes
+      interval: 60, 
       lastRun: null,
       nextRun: null
   });
+  
+  const [complianceRules, setComplianceRules] = useState<ComplianceRule[]>([
+      { id: 'rule-1', name: 'Service Password Encryption', description: 'Ensure passwords are encrypted', regex: 'service password-encryption', severity: 'HIGH', enabled: true },
+      { id: 'rule-2', name: 'SSH Timeout', description: 'Timeout must be set', regex: 'exec-timeout', severity: 'MEDIUM', enabled: true },
+  ]);
 
-  // Initial Data Load
   useEffect(() => {
     const initialData = generateMockTopology(25);
     setData(initialData);
@@ -104,8 +121,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSyslogs(generateSyslogs(initialData.devices));
     setCloudResources(generateCloudResources());
     setAutomationTasks(generateAutomationTasks());
+    setConfigBackups(generateConfigBackups(initialData.devices));
+    setNetflowData(generateNetflowData());
 
-    // Init Subnets based on data
     const subnetsMap: Record<string, number> = {};
     initialData.devices.forEach(d => {
         const parts = d.ip.split('.');
@@ -135,7 +153,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   }, []);
 
-  // Simulated Live Update
   useEffect(() => {
     const interval = setInterval(() => {
       if (!data) return;
@@ -164,22 +181,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return () => clearInterval(interval);
   }, [data]);
 
-  // Automatic Inspection Scheduler
   useEffect(() => {
       if (!inspectionSettings.enabled) return;
-      
       const now = new Date();
-      // If no next run or we passed it, run inspection
       if (!inspectionSettings.nextRun || now >= inspectionSettings.nextRun) {
            if (!isInspecting) {
                startInspection();
-               // Update Next Run
                const next = new Date(now.getTime() + inspectionSettings.interval * 60000);
                setInspectionSettings(prev => ({ ...prev, lastRun: now, nextRun: next }));
            }
       }
-      
-      // Check every minute
       const timer = setInterval(() => {
            const current = new Date();
            if (inspectionSettings.nextRun && current >= inspectionSettings.nextRun) {
@@ -425,63 +436,119 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setInspectionSettings(prev => ({ ...prev, ...settings }));
   }
 
-  const startInspection = () => {
+  const addComplianceRule = (rule: Partial<ComplianceRule>) => {
+      const newRule: ComplianceRule = {
+          id: `rule-${Date.now()}`,
+          name: rule.name || 'New Rule',
+          description: rule.description || '',
+          regex: rule.regex || '',
+          severity: rule.severity || 'MEDIUM',
+          enabled: true
+      };
+      setComplianceRules(prev => [...prev, newRule]);
+  };
+
+  // --- SMART INSPECTION 2.0 (SEQUENTIAL LOGIC) ---
+  const startInspection = async () => {
       if (isInspecting || !data) return;
       setIsInspecting(true);
       setInspectionProgress(0);
       setInspectionReport(null);
-      addLog({ level: 'INFO', message: 'Starting Network Inspection...' });
+      addLog({ level: 'INFO', message: 'Starting Smart Network Inspection...' });
 
       const devicesToInspect = data.devices;
-      const totalChecks = devicesToInspect.length * 4;
-      let completedChecks = 0;
       const results: InspectionItem[] = [];
+      const logs: string[] = [];
 
-      const interval = setInterval(() => {
-          completedChecks += 5;
-          const progress = Math.min(100, Math.floor((completedChecks / totalChecks) * 100));
-          setInspectionProgress(progress);
+      // Create a temporary ID for the report
+      const reportId = `insp-${Date.now()}`;
+      
+      const updateReport = (progress: number, newItems: InspectionItem[], newLogs: string[]) => {
+           setInspectionProgress(progress);
+           if (newLogs.length > 0) logs.push(...newLogs);
+           if (newItems.length > 0) results.push(...newItems);
+           
+           setInspectionReport({
+               id: reportId,
+               startTime: new Date(),
+               totalChecks: devicesToInspect.length,
+               passedChecks: results.filter(r => r.status === 'PASS').length,
+               failedChecks: results.filter(r => r.status !== 'PASS').length,
+               items: results,
+               score: 0,
+               log: logs
+           });
+      };
 
-          if (progress >= 100) {
-              clearInterval(interval);
-              setIsInspecting(false);
+      for (let i = 0; i < devicesToInspect.length; i++) {
+          const device = devicesToInspect[i];
+          const progress = Math.round(((i + 1) / devicesToInspect.length) * 100);
+          
+          updateReport(progress, [], [`Connecting to ${device.name} (${device.ip}) via SSH...`]);
+          await new Promise(r => setTimeout(r, 400)); 
+
+          updateReport(progress, [], [`Executing 'show run', 'show environment' on ${device.name}...`]);
+          await new Promise(r => setTimeout(r, 400));
+
+          const localItems: InspectionItem[] = [];
+          
+          localItems.push({
+              id: `chk-${device.id}-ping`, deviceId: device.id, deviceName: device.name, checkType: 'PING', timestamp: new Date(),
+              status: device.status === DeviceStatus.OFFLINE ? 'FAIL' : 'PASS',
+              message: device.status === DeviceStatus.OFFLINE ? 'Unreachable' : 'Latency <1ms'
+          });
+
+          complianceRules.forEach(rule => {
+              if (!rule.enabled) return;
+              if (device.config) {
+                  const match = new RegExp(rule.regex).test(device.config);
+                  localItems.push({
+                       id: `chk-${device.id}-${rule.id}`, deviceId: device.id, deviceName: device.name, checkType: 'COMPLIANCE', timestamp: new Date(),
+                       status: match ? 'PASS' : 'FAIL',
+                       message: match ? `Rule '${rule.name}' matched` : `Rule '${rule.name}' violation detected`
+                  });
+              }
+          });
+
+          if (device.status !== DeviceStatus.ONLINE || device.role === 'CORE') {
+              updateReport(progress, [], [`Sending telemetry to AI for analysis...`]);
+              // Pass structured result directly
+              const aiAnalysis = await geminiService.analyzeInspectionData(device, aiSettings);
               
-              devicesToInspect.forEach(d => {
-                  results.push({
-                      id: `chk-${d.id}-ping`, deviceId: d.id, deviceName: d.name, checkType: 'PING', timestamp: new Date(),
-                      status: d.status === DeviceStatus.OFFLINE ? 'FAIL' : 'PASS',
-                      message: d.status === DeviceStatus.OFFLINE ? 'Device unreachable' : 'Latency < 1ms'
-                  });
-                  results.push({
-                      id: `chk-${d.id}-cpu`, deviceId: d.id, deviceName: d.name, checkType: 'CPU', timestamp: new Date(),
-                      status: d.cpuUsage > 85 ? 'WARNING' : 'PASS',
-                      message: `CPU Load: ${d.cpuUsage}%`
-                  });
-                   results.push({
-                      id: `chk-${d.id}-cfg`, deviceId: d.id, deviceName: d.name, checkType: 'CONFIG', timestamp: new Date(),
-                      status: d.config ? 'PASS' : 'WARNING',
-                      message: d.config ? 'Config synchronized' : 'Config backup missing'
-                  });
+              // Determine status based on structured AI output
+              let status: 'PASS'|'WARNING'|'FAIL' = 'PASS';
+              if (typeof aiAnalysis === 'object' && aiAnalysis.score < 80) status = 'WARNING';
+              if (typeof aiAnalysis === 'object' && aiAnalysis.score < 50) status = 'FAIL';
+
+              localItems.push({
+                  id: `chk-${device.id}-ai`, deviceId: device.id, deviceName: device.name, checkType: 'AI_ANALYSIS', timestamp: new Date(),
+                  status: status,
+                  message: 'AI Health Assessment',
+                  aiAnalysis: aiAnalysis
               });
-
-              const passed = results.filter(r => r.status === 'PASS').length;
-              const failed = results.filter(r => r.status === 'FAIL' || r.status === 'WARNING').length;
-
-              const report: InspectionReport = {
-                  id: `insp-${Date.now()}`,
-                  startTime: new Date(),
-                  totalChecks: results.length,
-                  passedChecks: passed,
-                  failedChecks: failed,
-                  items: results,
-                  score: Math.round((passed / results.length) * 100)
-              };
-
-              setInspectionReport(report);
-              setInspectionHistory(prev => [report, ...prev]);
-              addLog({ level: 'SUCCESS', message: 'Network Inspection Completed.' });
           }
-      }, 500);
+
+          updateReport(progress, localItems, [`Finished inspecting ${device.name}.`]);
+      }
+
+      setIsInspecting(false);
+      const passed = results.filter(r => r.status === 'PASS').length;
+      const score = Math.round((passed / results.length) * 100) || 100;
+
+      const finalReport: InspectionReport = {
+          id: reportId,
+          startTime: new Date(),
+          totalChecks: results.length,
+          passedChecks: passed,
+          failedChecks: results.length - passed,
+          items: results,
+          score: score,
+          log: logs
+      };
+
+      setInspectionReport(finalReport);
+      setInspectionHistory(prev => [finalReport, ...prev]);
+      addLog({ level: 'SUCCESS', message: 'Smart Inspection Completed.' });
   }
 
   const selectInspectionReport = (id: string) => {
@@ -497,6 +564,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       bugDatabase,
       cloudResources,
       automationTasks,
+      configBackups,
+      netflowData,
       logs,
       syslogs,
       reports,
@@ -512,6 +581,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       inspectionSettings,
       updateInspectionSettings,
       selectInspectionReport,
+      complianceRules,
+      addComplianceRule,
+      detailedReportData: null, // Removed usage
 
       language,
       aiSettings,
@@ -539,10 +611,4 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       {children}
     </AppContext.Provider>
   );
-};
-
-export const useApp = () => {
-  const context = useContext(AppContext);
-  if (!context) throw new Error('useApp must be used within AppProvider');
-  return context;
 };

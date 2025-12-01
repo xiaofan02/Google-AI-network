@@ -35,9 +35,7 @@ export const DeviceList: React.FC = () => {
       role: 'ACCESS'
   });
 
-  // Import Text State
   const [importText, setImportText] = useState('');
-
   const t = DICTIONARY[language];
 
   // Filtering
@@ -47,11 +45,9 @@ export const DeviceList: React.FC = () => {
     return matchesSearch && matchesType;
   });
 
-  // Pagination Logic
   const totalPages = Math.ceil(filteredDevices.length / itemsPerPage);
   const paginatedDevices = filteredDevices.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
-  // Terminal Logic
   useEffect(() => {
       if (showTerminal) {
           setTerminalHistory([`NetGuardian Secure Shell (SSH) v2.0`, `Connecting to ${showTerminal.ip}...`, `Connected to ${showTerminal.name}`, '']);
@@ -156,7 +152,7 @@ export const DeviceList: React.FC = () => {
                 <input 
                     type="text" 
                     placeholder={t.search} 
-                    className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-slate-200 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    className="w-full bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-slate-200 focus:outline-none focus:border-blue-500"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value)}
                 />
@@ -198,7 +194,6 @@ export const DeviceList: React.FC = () => {
         </div>
       </div>
 
-      {/* Batch Actions Toolbar */}
       {selectedIds.length > 0 && (
           <div className="bg-blue-900/30 border border-blue-800 p-3 rounded-lg flex items-center justify-between animate-in fade-in slide-in-from-top-2">
               <span className="text-sm text-blue-200 font-medium px-2">{selectedIds.length} {t.selected}</span>
@@ -225,7 +220,6 @@ export const DeviceList: React.FC = () => {
                         </th>
                         <th className="px-6 py-4">{t.name}</th>
                         <th className="px-6 py-4">{t.type}</th>
-                        <th className="px-6 py-4">Vendor</th>
                         <th className="px-6 py-4">{t.ipAddress}</th>
                         <th className="px-6 py-4">{t.status}</th>
                         <th className="px-6 py-4">{t.cpu} / {t.memory}</th>
@@ -240,13 +234,15 @@ export const DeviceList: React.FC = () => {
                                     {selectedIds.includes(device.id) ? <CheckSquare size={16}/> : <Square size={16}/>}
                                 </button>
                             </td>
-                            <td className="px-6 py-4 font-medium text-slate-200">{device.name}</td>
+                            <td className="px-6 py-4 font-medium text-slate-200">
+                                {device.name}
+                                <span className="block text-[10px] text-slate-500">{device.vendor}</span>
+                            </td>
                             <td className="px-6 py-4 text-xs">
                                 <span className="px-2 py-1 rounded-full bg-slate-800 border border-slate-700">
                                     {device.type}
                                 </span>
                             </td>
-                             <td className="px-6 py-4 text-xs">{device.vendor}</td>
                             <td className="px-6 py-4 font-mono">{device.ip}</td>
                             <td className="px-6 py-4">
                                 <div className="flex items-center gap-2">
@@ -264,8 +260,17 @@ export const DeviceList: React.FC = () => {
                             </td>
                             <td className="px-6 py-4">
                                 <div className="flex flex-col gap-1 w-24">
-                                    <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
+                                    <div className="flex justify-between text-[10px] text-slate-500">
+                                        <span>CPU</span>
+                                        <span>{device.cpuUsage.toFixed(2)}%</span>
+                                    </div>
+                                    <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden mb-1">
                                         <div className="h-full bg-blue-500" style={{ width: `${device.cpuUsage}%` }}></div>
+                                    </div>
+                                    
+                                    <div className="flex justify-between text-[10px] text-slate-500">
+                                        <span>Mem</span>
+                                        <span>{device.memUsage.toFixed(2)}%</span>
                                     </div>
                                     <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                                         <div className="h-full bg-purple-500" style={{ width: `${device.memUsage}%` }}></div>
@@ -317,13 +322,6 @@ export const DeviceList: React.FC = () => {
                             </td>
                         </tr>
                     ))}
-                    {filteredDevices.length === 0 && (
-                        <tr>
-                            <td colSpan={8} className="px-6 py-8 text-center text-slate-500">
-                                No devices found matching your criteria.
-                            </td>
-                        </tr>
-                    )}
                 </tbody>
             </table>
         </div>
@@ -453,23 +451,23 @@ export const DeviceList: React.FC = () => {
         </div>
       )}
 
-      {/* View Config Modal - FIXED SCROLLING */}
+      {/* View Config Modal */}
       {viewConfigDevice && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-3xl shadow-2xl flex flex-col h-[80vh]">
-                <div className="flex justify-between items-center p-4 border-b border-slate-800 shrink-0">
+            <div className="bg-slate-900 border border-slate-700 rounded-xl w-full max-w-3xl shadow-2xl flex flex-col max-h-[80vh]">
+                <div className="flex justify-between items-center p-4 border-b border-slate-800">
                     <h3 className="font-bold text-white flex items-center gap-2">
                         <FileText size={18} className="text-blue-500"/>
                         {t.configViewer} - {viewConfigDevice.name}
                     </h3>
                     <button onClick={() => setViewConfigDevice(null)} className="text-slate-400 hover:text-white"><X size={20}/></button>
                 </div>
-                <div className="flex-1 min-h-0 bg-slate-950 p-4 overflow-hidden">
-                    <pre className="w-full h-full overflow-y-auto text-xs font-mono text-green-400 scrollbar-thin scrollbar-thumb-slate-700 whitespace-pre-wrap">
+                <div className="p-0 flex-1 overflow-hidden">
+                    <pre className="w-full h-full overflow-auto bg-slate-950 p-4 text-xs font-mono text-green-400 scrollbar-thin scrollbar-thumb-slate-700">
                         {viewConfigDevice.config || '# No configuration data available.'}
                     </pre>
                 </div>
-                <div className="p-3 border-t border-slate-800 bg-slate-800/50 flex justify-end shrink-0">
+                <div className="p-3 border-t border-slate-800 bg-slate-800/50 flex justify-end">
                     <button onClick={() => setViewConfigDevice(null)} className="px-4 py-2 bg-slate-700 hover:bg-slate-600 text-white rounded text-sm">{t.close}</button>
                 </div>
             </div>
@@ -480,28 +478,29 @@ export const DeviceList: React.FC = () => {
       {showTerminal && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
             <div className="bg-black border border-slate-700 rounded-xl w-full max-w-3xl shadow-2xl flex flex-col h-[500px]">
-                <div className="flex justify-between items-center p-2 border-b border-slate-800 bg-slate-900 rounded-t-xl shrink-0">
+                <div className="flex justify-between items-center p-2 border-b border-slate-800 bg-slate-900 rounded-t-xl">
                     <div className="flex gap-2 px-2">
                         <div className="w-3 h-3 rounded-full bg-red-500"></div>
                         <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
                         <div className="w-3 h-3 rounded-full bg-green-500"></div>
                     </div>
-                    <span className="text-slate-400 text-xs">{showTerminal.ip} - SSH ({showTerminal.vendor})</span>
+                    <span className="text-slate-400 text-xs">{showTerminal.ip} - SSH</span>
                     <button onClick={() => setShowTerminal(null)} className="text-slate-400 hover:text-white px-2"><X size={16}/></button>
                 </div>
-                <div className="p-4 flex-1 overflow-auto font-mono text-sm text-slate-300 scrollbar-thin scrollbar-thumb-slate-700" onClick={() => document.getElementById('term-input')?.focus()}>
-                    {terminalHistory.map((line, idx) => (
-                        <div key={idx} className="whitespace-pre-wrap mb-1">{line}</div>
+                <div className="p-4 flex-1 overflow-auto font-mono text-sm text-slate-300" onClick={() => document.getElementById('term-input')?.focus()}>
+                    {terminalHistory.map((line, i) => (
+                        <div key={i} className="whitespace-pre-wrap mb-1">{line}</div>
                     ))}
-                    <div className="flex items-center">
-                        <span className="text-green-500 mr-2">{showTerminal.name}#</span>
+                    <div className="flex">
+                        <span className="text-green-500 mr-2">
+                            {showTerminal.type === DeviceType.SWITCH || showTerminal.type === DeviceType.ROUTER ? `${showTerminal.name}#` : `${showTerminal.name}:~$`}
+                        </span>
                         <input 
                             id="term-input"
                             autoFocus
-                            type="text" 
-                            className="bg-transparent border-none outline-none text-slate-100 flex-1"
+                            className="bg-transparent border-none outline-none text-slate-300 flex-1"
                             value={terminalInput}
-                            onChange={e => setTerminalInput(e.target.value)}
+                            onChange={(e) => setTerminalInput(e.target.value)}
                             onKeyDown={handleTerminalCommand}
                         />
                     </div>

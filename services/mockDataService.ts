@@ -1,5 +1,5 @@
 
-import { Device, DeviceType, Vendor, DeviceStatus, Link, TopologyData, Vulnerability, Report, BugReport, LogEntry, CloudResource, AutomationTask } from '../types';
+import { Device, DeviceType, Vendor, DeviceStatus, Link, TopologyData, Vulnerability, Report, BugReport, LogEntry, CloudResource, AutomationTask, ConfigBackup, FlowRecord } from '../types';
 
 const getRandomStatus = (): DeviceStatus => {
   const rand = Math.random();
@@ -197,3 +197,52 @@ export const generateAutomationTasks = (): AutomationTask[] => [
     { id: 'task-2', name: 'Update Edge Firmware', description: 'Batch update firmware for edge access switches.', scriptType: 'ANSIBLE', script: '- name: Upgrade Firmware\n  hosts: edge_switches\n  tasks:\n    - name: Download Image...', lastRun: null, status: 'IDLE', progress: 0 },
     { id: 'task-3', name: 'NTP Configuration Sync', description: 'Ensure all devices are synced to 192.168.1.5.', scriptType: 'PYTHON', script: 'def sync_ntp(device):\n  print("Syncing NTP...")', lastRun: new Date('2023-10-20'), status: 'FAILED', progress: 45 },
 ];
+
+export const generateConfigBackups = (devices: Device[]): ConfigBackup[] => {
+    const backups: ConfigBackup[] = [];
+    const coreDevices = devices.filter(d => d.role === 'CORE' || d.role === 'DISTRIBUTION');
+    
+    coreDevices.forEach(d => {
+        // v1: Current config (minus one line to simulate change)
+        backups.push({
+            id: `bk-${d.id}-v1`,
+            deviceId: d.id,
+            timestamp: new Date(Date.now() - 86400000 * 2), // 2 days ago
+            version: 'v1.0',
+            content: d.config ? d.config.replace('service timestamps', '! service timestamps removed') : '',
+            changeNote: 'Initial Baseline'
+        });
+
+        // v2: Current config
+        backups.push({
+            id: `bk-${d.id}-v2`,
+            deviceId: d.id,
+            timestamp: new Date(Date.now() - 3600000), // 1 hour ago
+            version: 'v1.1',
+            content: d.config || '',
+            changeNote: 'Routine Update'
+        });
+    });
+    return backups;
+};
+
+export const generateNetflowData = (): FlowRecord[] => {
+    const flows: FlowRecord[] = [];
+    const protocols: ('TCP'|'UDP'|'ICMP')[] = ['TCP', 'UDP', 'ICMP'];
+    const apps = ['HTTPS', 'SSH', 'DNS', 'HTTP', 'SNMP', 'RDP'];
+    
+    for(let i=0; i<50; i++) {
+        flows.push({
+            id: `fl-${Math.random()}`,
+            timestamp: new Date(),
+            srcIp: `192.168.${Math.floor(Math.random()*10)}.${Math.floor(Math.random()*255)}`,
+            dstIp: `10.0.${Math.floor(Math.random()*5)}.${Math.floor(Math.random()*255)}`,
+            srcPort: Math.floor(Math.random() * 60000),
+            dstPort: [80, 443, 22, 53, 161][Math.floor(Math.random()*5)],
+            protocol: protocols[Math.floor(Math.random()*3)],
+            bytes: Math.floor(Math.random() * 1000000),
+            application: apps[Math.floor(Math.random()*apps.length)]
+        });
+    }
+    return flows.sort((a,b) => b.bytes - a.bytes);
+};

@@ -14,6 +14,8 @@ import { LogAnalysis } from './components/LogAnalysis';
 import { AutomationView } from './components/AutomationView';
 import { CloudView } from './components/CloudView';
 import { InspectionView } from './components/InspectionView';
+import { ConfigManagement } from './components/ConfigManagement';
+import { NetFlowView } from './components/NetFlowView';
 import { AICopilot } from './components/AICopilot';
 import { AppProvider } from './context/AppContext';
 import { GoogleGenAI } from "@google/genai";
@@ -39,6 +41,8 @@ const App: React.FC = () => {
                 <Route path="/threats" element={<ThreatIntelligence />} />
                 <Route path="/logs" element={<LogAnalysis />} />
                 <Route path="/automation" element={<AutomationView />} />
+                <Route path="/configuration" element={<ConfigManagement />} />
+                <Route path="/netflow" element={<NetFlowView />} />
                 <Route path="/cloud" element={<CloudView />} />
                 <Route path="/inspection" element={<InspectionView />} />
                 <Route path="/settings" element={<SettingsView />} />
